@@ -1,0 +1,20 @@
+# Clés privées : seules les clés publiques (.pub) vont dans le dépôt
+id_*
+!id_*.pub
+*.key
+*.pem
+*_rsa
+*_ed25519
+!*.pub
+
+# Secrets éventuels
+*.secret
+.env
+
+# Fichiers d'éditeurs et de systèmes
+*.swp
+*~
+.vscode/
+.idea/
+.DS_Store
+.obsidian/
