@@ -7,8 +7,8 @@ Contexte B : cabinet comptable Chiffres & Co.
 
 | Membre | Périmètre |
 | --- | --- |
-| Membre 1 | Comptes, droits, journaux, sauvegarde (C1–C4, J3, J4, D1, B1–B4) |
-| Membre 2 | SSH, pare-feu, fail2ban, intégration (S1–S5, J1, J2, D2, D3) |
+| Charles | Comptes, droits, journaux, sauvegarde (C1–C4, J3, J4, D1, B1–B4) |
+| Mathieu | SSH, pare-feu, fail2ban, intégration (S1–S5, J1, J2, D2, D3) |
 
 ## Prérequis
 
@@ -22,7 +22,7 @@ Contexte B : cabinet comptable Chiffres & Co.
 Sur la VM, en root :
 
 ```bash
-git clone <url-du-depot> durcissement
+git clone https://github.com/mathieudlre/Cabinet-comptable-Chiffres-Co durcissement
 cd durcissement
 ./installer.sh
 ```
