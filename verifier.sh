@@ -92,7 +92,7 @@ nettoyer() {
 }
 trap nettoyer EXIT
 
-# --- Tests : comptes et droits (membre 1) ---------------------------------
+# --- Tests : comptes et droits (Charles) ---------------------------------
 # Une fonction par exigence. Une fonction peut appeler ok/ko plusieurs
 # fois : c'est ainsi qu'on atteint les 25 tests demandés.
 
@@ -112,10 +112,24 @@ test_C4() {
     a_faire "C4" "root verrouillé, répertoires personnels privés"
 }
 
-# --- Tests : accès SSH (membre 2) -----------------------------------------
+# --- Tests : accès SSH (Mathieu) -----------------------------------------
 
 test_S1() {
-    a_faire "S1" "authentification par clé uniquement"
+    local valeur cle
+    valeur="$(sshd_valeur pubkeyauthentication)"
+    if [[ "$valeur" == "yes" ]]; then
+        ok "S1" "authentification par clé activée"
+    else
+        ko "S1" "PubkeyAuthentication vaut '${valeur:-?}' (attendu : yes)"
+    fi
+    for cle in passwordauthentication kbdinteractiveauthentication; do
+        valeur="$(sshd_valeur "$cle")"
+        if [[ "$valeur" == "no" ]]; then
+            ok "S1" "$cle désactivé"
+        else
+            ko "S1" "$cle vaut '${valeur:-?}' (attendu : no)"
+        fi
+    done
 }
 
 # Exemple de test complet, sur le modèle du sujet
@@ -130,15 +144,76 @@ test_S2() {
 }
 
 test_S3() {
-    a_faire "S3" "AllowGroups limité à acces_ssh"
+        local valeur
+    valeur="$(sshd_valeur allowgroups)"
+    if [[ "$valeur" == "acces_ssh" ]]; then
+        ok "S3" "seul le groupe acces_ssh est autorisé"
+    else
+        ko "S3" "AllowGroups vaut '${valeur:-?}' (attendu : acces_ssh seul)"
+    fi
+    # Un AllowGroups vers un groupe inexistant refuserait tout le monde
+    if getent group acces_ssh >/dev/null; then
+        ok "S3" "le groupe acces_ssh existe"
+    else
+        ko "S3" "le groupe acces_ssh n'existe pas"
+    fi
 }
+
+# Valeurs maximales imposées par le cahier des charges
+MAX_ESSAIS=4
+MAX_INACTIVITE=900    # 15 minutes, en secondes
 
 test_S4() {
-    a_faire "S4" "4 essais au plus, session inactive fermée en 15 min au plus"
+    local valeur ligne duree
+    valeur="$(sshd_valeur maxauthtries)"
+    if [[ "$valeur" =~ ^[0-9]+$ ]] && (( valeur <= MAX_ESSAIS )); then
+        ok "S4" "au plus $valeur essais d'authentification par connexion"
+    else
+        ko "S4" "MaxAuthTries vaut '${valeur:-?}' (attendu : $MAX_ESSAIS au plus)"
+    fi
+ 
+    # ChannelTimeout peut lister plusieurs types (session=..., x11=...) :
+    # on extrait celui des sessions.
+    ligne="$(sshd -T 2>/dev/null | awk '$1 == "channeltimeout"')"
+    valeur="$(grep -o 'session=[^ ]*' <<< "$ligne")"
+    duree="$(en_secondes "${valeur#session=}")"
+    if [[ -n "$duree" ]] && (( duree > 0 && duree <= MAX_INACTIVITE )); then
+        ok "S4" "session inactive fermée après $duree s"
+    else
+        ko "S4" "ChannelTimeout session vaut '${valeur:-absent}' (attendu : entre 1 s et $MAX_INACTIVITE s)"
+    fi
+ 
+    valeur="$(sshd_valeur unusedconnectiontimeout)"
+    duree="$(en_secondes "$valeur")"
+    if [[ -n "$duree" ]] && (( duree > 0 && duree <= MAX_INACTIVITE )); then
+        ok "S4" "connexion sans session fermée après $duree s"
+    else
+        ko "S4" "UnusedConnectionTimeout vaut '${valeur:-?}' (attendu : entre 1 s et $MAX_INACTIVITE s)"
+    fi
 }
 
+SSH_CONF_DEPOT="$REPERTOIRE_DEPOT/config/ssh/sshd_config.d/10-durcissement.conf"
+SSH_CONF_SYSTEME="/etc/ssh/sshd_config.d/10-durcissement.conf"
+ 
 test_S5() {
-    a_faire "S5" "configuration dans sshd_config.d, validée par sshd -t"
+    # La config installée doit être identique à celle du dépôt :
+    # toute modification à la main est détectée.
+    if cmp -s "$SSH_CONF_DEPOT" "$SSH_CONF_SYSTEME"; then
+        ok "S5" "$SSH_CONF_SYSTEME identique à la version du dépôt"
+    else
+        ko "S5" "$SSH_CONF_SYSTEME absent ou différent du dépôt (relancer installer.sh)"
+    fi
+    # Sans la ligne Include, les fichiers de sshd_config.d sont ignorés
+    if grep -Eq '^[[:space:]]*Include[[:space:]]+/etc/ssh/sshd_config\.d/\*\.conf' /etc/ssh/sshd_config; then
+        ok "S5" "sshd_config inclut bien sshd_config.d"
+    else
+        ko "S5" "la ligne Include /etc/ssh/sshd_config.d/*.conf manque dans sshd_config"
+    fi
+    if sshd -t >/dev/null 2>&1; then
+        ok "S5" "configuration validée par sshd -t"
+    else
+        ko "S5" "sshd -t signale une erreur de configuration"
+    fi
 }
 
 # --- Tests : journaux et défense ------------------------------------------
@@ -159,7 +234,7 @@ test_J4() {
     a_faire "J4" "analyse_logs.sh présent, protégé, code de sortie exploitable"
 }
 
-# --- Tests : sauvegarde (membre 1) ----------------------------------------
+# --- Tests : sauvegarde (Charles) ----------------------------------------
 
 test_B1() {
     a_faire "B1" "sauvegarde incrémentale versionnée, au moins 7 versions gardées"
