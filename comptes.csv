@@ -1,7 +1,7 @@
 login;nom;groupe_principal;groupes_secondaires
 charles;Charles;informatique;admins,acces_ssh
 mathieu;Mathieu;informatique;admins,acces_ssh
-hussein;Hussein;informatique;admin,acces_ssh
+hussein;Hussein;informatique;admins,acces_ssh
 support;Compte support;support;acces_ssh
 mdupuis;Marc Dupuis;comptables;
 sleroy;Sophie Leroy;comptables;
