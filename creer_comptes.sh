@@ -72,3 +72,37 @@ while IFS=';' read -r login nom groupe_principal groupes_secondaires; do
     fi
     installer_cle "$login"
 done < <(tail -n +2 "$CSV" | tr -d '\r')
+# poser_acl CHEMIN ACL : crée le répertoire et pose permissions + ACL (C2)
+# chmod passe AVANT setfacl : chmod modifie le masque des ACL
+# -m : droits sur le répertoire, -d -m : ACL par défaut pour les fichiers créés plus tard
+poser_acl() {
+    local chemin="$1"
+    local acl="$2"
+
+    mkdir -p "$chemin"
+    chmod 770 "$chemin"
+    setfacl -m "$acl" "$chemin"
+    setfacl -d -m "$acl" "$chemin"
+    echo "Répertoire prêt : $chemin"
+}
+
+# depot : les stagiaires déposent sans lister ni lire. Le sticky bit (1770)
+# les empêche de supprimer le fichier d'un autre ; g::--- retire la lecture
+# au groupe propriétaire du fichier déposé (le groupe stagiaire).
+creer_depot() {
+    local d="/srv/commun/depot"
+    mkdir -p "$d"
+    chmod 1770 "$d"
+    setfacl -m g:comptables:rwx,g:rh:rwx,g:direction:rwx,g:stagiaire:-wx "$d"
+    setfacl -d -m g:comptables:rwx,g:rh:rwx,g:direction:rwx,g:stagiaire:---,g::--- "$d"
+    echo "Répertoire prêt : $d"
+}
+
+creer_repertoires() {
+    poser_acl /srv/dossiers_clients "g:comptables:rwx,g:direction:r-x"
+    poser_acl /srv/rh "g:rh:rwx,g:direction:r-x"
+    poser_acl /srv/commun "g:comptables:rwx,g:rh:rwx,g:direction:rwx,g:stagiaire:r-x"
+creer_depot
+}
+
+creer_repertoires
