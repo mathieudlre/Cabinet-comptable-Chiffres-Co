@@ -247,7 +247,7 @@ test_J4() {
     a_faire "J4" "analyse_logs.sh présent, protégé, code de sortie exploitable"
 }
 
-# --- Tests : sauvegarde (Charles) ----------------------------------------
+# --- Tests : sauvegarde (Hussein) ----------------------------------------
 
 test_B1() {
     a_faire "B1" "sauvegarde incrémentale versionnée, au moins 7 versions gardées"
