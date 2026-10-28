@@ -1,0 +1,13 @@
+login;nom;groupe_principal;groupes_secondaires
+charles;Charles;informatique;admins,acces_ssh
+mathieu;Mathieu;informatique;admins,acces_ssh
+hussein;Hussein;informatique;admin,acces_ssh
+support;Compte support;support;acces_ssh
+mdupuis;Marc Dupuis;comptables;
+sleroy;Sophie Leroy;comptables;
+cmoreau;Claire Moreau;rh;
+jpetit;Julien Petit;rh;
+fgarcia;Franck Garcia;direction;
+lroux;Laura Roux;direction;
+tbernard;Thomas Bernard;stagiaire;
+emeunier;Emma Meunier;stagiaire;
