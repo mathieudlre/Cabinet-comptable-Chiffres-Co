@@ -153,16 +153,16 @@ durcir_comptes() {
     # Répertoires personnels existants : pas de lecture pour les autres
     local repertoire
     for repertoire in /home/*/; do
-        chmod 750 "$repertoire"
+        chmod 700 "$repertoire"
     done
 
     # Comptes créés plus tard : même droit, réglé dans /etc/login.defs
     if grep -q '^HOME_MODE' /etc/login.defs; then
-        sed -i 's/^HOME_MODE.*/HOME_MODE\t0750/' /etc/login.defs
+        sed -i 's/^HOME_MODE.*/HOME_MODE\t0700/' /etc/login.defs
     else
-        printf 'HOME_MODE\t0750\n' >> /etc/login.defs
+        printf 'HOME_MODE\t0700\n' >> /etc/login.defs
     fi
-    info "répertoires personnels en 750, HOME_MODE 0750"
+    info "répertoires personnels en 700, HOME_MODE 0700"
 }
 
 # acces_ssh_possible : vrai si au moins un membre d'acces_ssh a une clé
