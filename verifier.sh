@@ -77,6 +77,19 @@ sshd_valeur() {
     sshd -T 2>/dev/null | awk -v cle="$1" '$1 == cle { print $2 }'
 }
 
+# en_secondes DUREE : convertit une durée au format sshd (600, 90s, 10m,
+# 1h) en secondes. N'affiche rien si le format n'est pas reconnu.
+en_secondes() {
+    if [[ "$1" =~ ^([0-9]+)([smh]?)$ ]]; then
+        local nombre="${BASH_REMATCH[1]}"
+        case "${BASH_REMATCH[2]}" in
+            h) echo $((nombre * 3600)) ;;
+            m) echo $((nombre * 60)) ;;
+            *) echo "$nombre" ;;
+        esac
+    fi
+}
+
 # a_nettoyer CHEMIN : note un fichier de test à supprimer à la fin
 a_nettoyer() {
     A_NETTOYER+=("$1")
