@@ -232,7 +232,42 @@ test_S5() {
 # --- Tests : journaux et défense ------------------------------------------
 
 test_J1() {
-    a_faire "J1" "fail2ban protège SSH"
+        # Règles réellement chargées dans le noyau (pas celles du fichier)
+    local regles politique
+    # shellcheck disable=SC2086  # découpage voulu : famille, table, chaîne
+    regles="$(nft list chain $NFT_CHAINE_ENTREE 2>/dev/null)"
+    if [[ -z "$regles" ]]; then
+        ko "J2" "chaîne $NFT_CHAINE_ENTREE absente : pare-feu non chargé"
+    else
+        politique="$(grep -o 'policy [a-z]*' <<< "$regles" | awk '{ print $2 }')"
+        if [[ "$politique" == "drop" ]]; then
+            ok "J2" "politique par défaut du pare-feu en entrée : drop"
+        else
+            ko "J2" "politique par défaut du pare-feu : ${politique:-?} (attendu : drop)"
+        fi
+        if grep -Eq 'tcp dport (22|ssh) accept' <<< "$regles"; then
+            ok "J2" "SSH (port 22) accepté en entrée"
+        else
+            ko "J2" "aucune règle n'accepte SSH (attendu : tcp dport 22 accept)"
+        fi
+        if grep -Eq 'ct state (established,related|related,established) accept' <<< "$regles"; then
+            ok "J2" "connexions établies acceptées"
+        else
+            ko "J2" "connexions établies non acceptées (attendu : ct state established,related accept)"
+        fi
+    fi
+ 
+    # La règle survit au redémarrage : service activé, fichier conforme
+    if systemctl is-enabled --quiet nftables 2>/dev/null; then
+        ok "J2" "service nftables activé au démarrage"
+    else
+        ko "J2" "service nftables non activé (attendu : systemctl enable nftables)"
+    fi
+    if cmp -s "$NFT_CONF_DEPOT" "$NFT_CONF_SYSTEME"; then
+        ok "J2" "$NFT_CONF_SYSTEME identique à la version du dépôt"
+    else
+        ko "J2" "$NFT_CONF_SYSTEME absent ou différent du dépôt (relancer installer.sh)"
+    fi
 }
 
 test_J2() {
