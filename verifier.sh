@@ -190,7 +190,7 @@ test_C3() {
         ko "C3" "hussein (admins) n'a pas (ALL : ALL) ALL"
     fi
     sortie="$(LC_ALL=C sudo -l -U support 2>/dev/null)"
-    if grep -q '(root) /usr/local/sbin/analyse_logs.sh' <<< "$sortie" && ! grep -q 'ALL) ALL' <<< "$sortie"; then
+    if grep -qE '\(root\) (NOPASSWD: )?/usr/local/sbin/analyse_logs\.sh' <<< "$sortie" && ! grep -q 'ALL) ALL' <<< "$sortie"; then
         ok "C3" "support ne peut lancer que analyse_logs.sh"
     else
         ko "C3" "support n'est pas limité à analyse_logs.sh"
@@ -421,7 +421,28 @@ test_J3() {
 }
 
 test_J4() {
-    a_faire "J4" "analyse_logs.sh présent, protégé, code de sortie exploitable"
+    local s="/usr/local/sbin/analyse_logs.sh" rc=0
+    if [[ -f "$s" && "$(stat -c '%U:%G %a' "$s")" == "root:root 755" ]]; then
+        ok "J4" "analyse_logs.sh installé en root:root 755"
+    else
+        ko "J4" "analyse_logs.sh absent ou mauvais propriétaire/droits (attendu root:root 755)"
+    fi
+    if en_tant_que support sudo -n "$s" -h; then
+        ok "J4" "support peut lancer analyse_logs.sh via sudo"
+    else
+        ko "J4" "support ne peut pas lancer analyse_logs.sh via sudo"
+    fi
+    if ! en_tant_que support test -w "$s"; then
+        ok "J4" "support ne peut pas modifier analyse_logs.sh"
+    else
+        ko "J4" "support peut modifier analyse_logs.sh"
+    fi
+    "$s" -s abc >/dev/null 2>&1 || rc=$?
+    if [[ $rc -eq 2 ]]; then
+        ok "J4" "code de sortie 2 sur erreur d'usage"
+    else
+        ko "J4" "code de sortie $rc sur erreur d'usage (attendu : 2)"
+    fi
 }
 
 # --- Tests : sauvegarde (Hussein) ----------------------------------------
