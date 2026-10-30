@@ -408,7 +408,16 @@ test_J2() {
 }
 
 test_J3() {
-    a_faire "J3" "journal système persistant"
+    if grep -rqs '^Storage=persistent' /etc/systemd/journald.conf.d/; then
+        ok "J3" "journald configuré en Storage=persistent"
+    else
+        ko "J3" "Storage=persistent absent de /etc/systemd/journald.conf.d/"
+    fi
+    if [[ -d /var/log/journal ]]; then
+        ok "J3" "le journal est stocké sur disque (/var/log/journal)"
+    else
+        ko "J3" "/var/log/journal n'existe pas"
+    fi
 }
 
 test_J4() {
