@@ -484,6 +484,8 @@ test_D1() {
 # ajoutée ici doit être expliquée et justifiée dans DOSSIER.md (D2).
 ECOUTES_AUTORISEES=(
     tcp:22      # SSH, seul service ouvert
+    udp:68      # client DHCP (dhcpcd) : obtient l'adresse IPv4 de la VM
+    udp:546     # client DHCPv6 (dhcpcd) : configuration IPv6, lien local seulement
 )
 
 test_D2() {
