@@ -163,6 +163,17 @@ test_C2() {
     sudo -u fgarcia test -r "$f" || erreurs="$erreurs [direction devrait lire un fichier créé après coup]"
     sudo -u cmoreau test -r "$f" && erreurs="$erreurs [rh ne devrait pas lire un fichier créé après coup]"
 
+    # Dépôt des stagiaires : déposer oui, lister / lire / supprimer non
+    local d="/srv/commun/depot/.verif_depot_$$"
+    A_NETTOYER+=("$d")
+    echo "test" | sudo -u tbernard tee "$d" > /dev/null 2>&1
+    [[ -f "$d" ]] || erreurs="$erreurs [stagiaire devrait pouvoir déposer dans depot]"
+    sudo -u tbernard ls /srv/commun/depot > /dev/null 2>&1 && erreurs="$erreurs [stagiaire ne devrait pas lister depot]"
+    sudo -u emeunier cat "$d" > /dev/null 2>&1 && erreurs="$erreurs [un stagiaire ne devrait pas lire le fichier d'un autre]"
+    sudo -u fgarcia cat "$d" > /dev/null 2>&1 || erreurs="$erreurs [direction devrait lire un fichier déposé]"
+    sudo -u emeunier rm -f "$d" 2>/dev/null
+    [[ -e "$d" ]] || erreurs="$erreurs [un stagiaire a pu supprimer le fichier d'un autre (sticky bit)]"
+
     if [[ -z "$erreurs" ]]; then
         ok "C2" "droits de /srv conformes, y compris sur un fichier créé après coup"
     else
