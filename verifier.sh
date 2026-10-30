@@ -448,19 +448,68 @@ test_J4() {
 # --- Tests : sauvegarde (Hussein) ----------------------------------------
 
 test_B1() {
-    a_faire "B1" "sauvegarde incrémentale versionnée, au moins 7 versions gardées"
+    local versions n
+    mapfile -t versions < <(ls -1d /backup/20* 2>/dev/null)
+    n=${#versions[@]}
+    if (( n >= 2 )); then
+        ok "B1" "$n versions datées de la sauvegarde"
+    else
+        ko "B1" "$n version(s) dans /backup (attendu : au moins 2)"
+        return
+    fi
+    if (( n <= 7 )); then
+        ok "B1" "rotation : $n versions gardées (7 au plus)"
+    else
+        ko "B1" "$n versions gardées, la rotation ne fonctionne pas"
+    fi
+    if (( $(stat -c %h "${versions[-1]}/etc/hostname" 2>/dev/null || echo 0) >= 2 )); then
+        ok "B1" "fichier inchangé partagé entre deux versions (incrémental)"
+    else
+        ko "B1" "/etc/hostname n'est pas partagé entre les versions (--link-dest ?)"
+    fi
+    if diff <(getfacl -p /srv/dossiers_clients 2>/dev/null | sed 1d) <(getfacl -p "${versions[-1]}/srv/dossiers_clients" 2>/dev/null | sed 1d) >/dev/null; then
+        ok "B1" "ACL de /srv conservées dans la sauvegarde"
+    else
+        ko "B1" "ACL de /srv/dossiers_clients différentes dans la sauvegarde"
+    fi
 }
 
 test_B2() {
-    a_faire "B2" "sauvegarde planifiée et journalisée"
+    if systemctl is-enabled --quiet sauvegarde.timer && systemctl is-active --quiet sauvegarde.timer; then
+        ok "B2" "timer sauvegarde.timer activé et actif"
+    else
+        ko "B2" "sauvegarde.timer n'est pas activé ou pas actif"
+    fi
+    if journalctl -u sauvegarde.service -q --no-pager 2>/dev/null | grep -q "sauvegarde réussie"; then
+        ok "B2" "exécution de la sauvegarde présente dans le journal"
+    else
+        ko "B2" "aucune sauvegarde réussie dans le journal"
+    fi
 }
 
 test_B3() {
-    a_faire "B3" "répertoire de sauvegarde réservé aux administrateurs"
+    if [[ "$(stat -c '%U:%G %a' /backup 2>/dev/null)" == "root:admins 750" ]]; then
+        ok "B3" "/backup en root:admins 750"
+    else
+        ko "B3" "/backup n'est pas en root:admins 750"
+    fi
+    if ! en_tant_que mdupuis ls /backup; then
+        ok "B3" "un utilisateur non administrateur ne peut pas lister /backup"
+    else
+        ko "B3" "mdupuis peut lister /backup"
+    fi
 }
 
 test_B4() {
-    a_faire "B4" "restauration possible depuis une version antérieure"
+    local v n=0
+    for v in /backup/20*/; do
+        [[ -d "$v/srv/dossiers_clients" && -d "$v/etc" ]] && n=$((n + 1))
+    done
+    if (( n >= 2 )); then
+        ok "B4" "$n versions restaurables contenant /srv et /etc"
+    else
+        ko "B4" "$n version(s) restaurable(s) (attendu : au moins 2)"
+    fi
 }
 
 # --- Tests : système ------------------------------------------------------
