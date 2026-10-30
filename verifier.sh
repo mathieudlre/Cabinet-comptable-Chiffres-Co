@@ -331,8 +331,20 @@ test_B4() {
 
 # --- Tests : système ------------------------------------------------------
 
+"D1" "mises à jour de sécurité automatiques"
 test_D1() {
-    a_faire "D1" "mises à jour de sécurité automatiques"
+    local erreurs=""
+    dpkg -s unattended-upgrades 2>/dev/null | grep -q "Status: install ok installed" || erreurs="$erreurs [paquet unattended-upgrades non installé]"
+    apt-config dump APT::Periodic::Update-Package-Lists | grep -q '"1"' || erreurs="$erreurs [Update-Package-Lists n'est pas à 1]"
+    apt-config dump APT::Periodic::Unattended-Upgrade | grep -q '"1"' || erreurs="$erreurs [Unattended-Upgrade n'est pas à 1]"
+    systemctl is-enabled --quiet apt-daily-upgrade.timer || erreurs="$erreurs [timer apt-daily-upgrade non activé]"
+    systemctl is-active --quiet apt-daily-upgrade.timer || erreurs="$erreurs [timer apt-daily-upgrade inactif]"
+
+    if [[ -z "$erreurs" ]]; then
+        ok "D1" "mises à jour de sécurité automatiques actives (paquet, configuration, timer)"
+    else
+        ko "D1" "mises à jour automatiques non conformes :$erreurs"
+    fi
 }
 
 test_D2() {
