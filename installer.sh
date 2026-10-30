@@ -225,10 +225,17 @@ configurer_pare_feu() {
     # -c : vérifie les règles sans les appliquer
     nft -c -f "$source" || erreur "règles invalides dans config/nftables.conf"
     copier "$source" /etc/nftables.conf 644
-    # enable : règles rechargées à chaque démarrage. restart : appliquées
-    # tout de suite. Attention à la cohabitation avec fail2ban (J1/J2).
+    # enable : règles rechargées à chaque démarrage (J2 : la règle survit
+    # au redémarrage).
     systemctl enable nftables >/dev/null 2>&1
-    systemctl restart nftables
+    # Jamais « restart » : l'arrêt du service lance « nft flush ruleset »,
+    # qui effacerait aussi la table de fail2ban et ses bannissements (J1).
+    # « reload » relit seulement le fichier, qui ne remplace que notre table.
+    if systemctl is-active --quiet nftables; then
+        systemctl reload nftables
+    else
+        systemctl start nftables
+    fi
     info "règles validées par nft -c, service activé"
 }
 
