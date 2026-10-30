@@ -109,12 +109,65 @@ trap nettoyer EXIT
 # Une fonction par exigence. Une fonction peut appeler ok/ko plusieurs
 # fois : c'est ainsi qu'on atteint les 25 tests demandés.
 
+
+# "C1" "comptes et groupes conformes à $FICHIER_COMPTES"
 test_C1() {
-    a_faire "C1" "comptes et groupes conformes à $FICHIER_COMPTES"
+    local erreurs="" login nom principal secondaires g
+    while IFS=';' read -r login nom principal secondaires; do
+        if ! getent passwd "$login" > /dev/null; then
+            erreurs="$erreurs $login(absent)"
+            continue
+        fi
+        if [[ "$(id -gn "$login")" != "$principal" ]]; then
+            erreurs="$erreurs $login(mauvais groupe principal)"
+        fi
+        for g in ${secondaires//,/ }; do
+            if ! id -nG "$login" | grep -qw "$g"; then
+                erreurs="$erreurs $login(pas dans $g)"
+            fi
+        done
+    done < <(tail -n +2 "$FICHIER_COMPTES")
+
+    if [[ -z "$erreurs" ]]; then
+        ok "C1" "tous les comptes et groupes de comptes.csv existent"
+    else
+        ko "C1" "écarts avec comptes.csv :$erreurs"
+    fi
 }
 
+
+#"C2" "droits et ACL des répertoires de /srv"
 test_C2() {
-    a_faire "C2" "droits et ACL des répertoires de /srv"
+    local erreurs=""
+    local f="/srv/dossiers_clients/.verif_c2_$$"
+    A_NETTOYER+=("$f")
+
+    # Ce qui doit marcher
+    sudo -u mdupuis test -w /srv/dossiers_clients || erreurs="$erreurs [comptable devrait écrire dans dossiers_clients]"
+    sudo -u fgarcia test -r /srv/dossiers_clients || erreurs="$erreurs [direction devrait lire dossiers_clients]"
+    sudo -u cmoreau test -w /srv/rh || erreurs="$erreurs [rh devrait écrire dans rh]"
+    sudo -u fgarcia test -r /srv/rh || erreurs="$erreurs [direction devrait lire rh]"
+    sudo -u tbernard test -r /srv/commun || erreurs="$erreurs [stagiaire devrait lire commun]"
+    sudo -u tbernard test -w /srv/commun/depot || erreurs="$erreurs [stagiaire devrait déposer dans depot]"
+
+    # Ce qui doit être refusé
+    sudo -u cmoreau test -r /srv/dossiers_clients && erreurs="$erreurs [rh ne devrait pas lire dossiers_clients]"
+    sudo -u tbernard test -r /srv/dossiers_clients && erreurs="$erreurs [stagiaire ne devrait pas lire dossiers_clients]"
+    sudo -u fgarcia test -w /srv/dossiers_clients && erreurs="$erreurs [direction ne devrait pas écrire dans dossiers_clients]"
+    sudo -u mdupuis test -r /srv/rh && erreurs="$erreurs [comptable ne devrait pas lire rh]"
+    sudo -u tbernard test -w /srv/commun && erreurs="$erreurs [stagiaire ne devrait pas écrire dans commun]"
+    sudo -u tbernard test -r /srv/commun/depot && erreurs="$erreurs [stagiaire ne devrait pas lister depot]"
+
+    # Fichier créé après coup : l'ACL par défaut doit s'appliquer
+    sudo -u mdupuis touch "$f" 2>/dev/null
+    sudo -u fgarcia test -r "$f" || erreurs="$erreurs [direction devrait lire un fichier créé après coup]"
+    sudo -u cmoreau test -r "$f" && erreurs="$erreurs [rh ne devrait pas lire un fichier créé après coup]"
+
+    if [[ -z "$erreurs" ]]; then
+        ok "C2" "droits de /srv conformes, y compris sur un fichier créé après coup"
+    else
+        ko "C2" "droits non conformes :$erreurs"
+    fi
 }
 
 test_C3() {
