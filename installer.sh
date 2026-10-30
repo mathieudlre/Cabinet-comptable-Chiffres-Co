@@ -127,8 +127,11 @@ configurer_sudo() {
         info "installé : /etc/sudoers.d/$nom"
     done
 
-    # À COMPLÉTER (C3) : une Debian fraîche donne peut-être déjà sudo à un
-    # compte. Le repérer et le retirer (voir « Pièges fréquents » du sujet).
+    local membre
+    for membre in $(membres_du_groupe sudo); do
+        gpasswd -d "$membre" sudo >/dev/null
+        info "retiré du groupe sudo : $membre"
+    done
 }
 
 # admin_disponible : vrai si au moins un administrateur existe et que

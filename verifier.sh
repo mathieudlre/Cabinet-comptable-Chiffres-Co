@@ -182,11 +182,42 @@ test_C2() {
 }
 
 test_C3() {
-    a_faire "C3" "sudo réservé à admins, support limité à analyse_logs.sh"
+    local sortie
+    sortie="$(LC_ALL=C sudo -l -U hussein 2>/dev/null)"
+    if grep -q '(ALL : ALL) ALL' <<< "$sortie"; then
+        ok "C3" "un membre d'admins a tous les droits sudo"
+    else
+        ko "C3" "hussein (admins) n'a pas (ALL : ALL) ALL"
+    fi
+    sortie="$(LC_ALL=C sudo -l -U support 2>/dev/null)"
+    if grep -q '(root) /usr/local/sbin/analyse_logs.sh' <<< "$sortie" && ! grep -q 'ALL) ALL' <<< "$sortie"; then
+        ok "C3" "support ne peut lancer que analyse_logs.sh"
+    else
+        ko "C3" "support n'est pas limité à analyse_logs.sh"
+    fi
+    if [[ -z "$(getent group sudo | cut -d: -f4)" ]]; then
+        ok "C3" "le groupe sudo est vide"
+    else
+        ko "C3" "membres dans le groupe sudo : $(getent group sudo | cut -d: -f4)"
+    fi
 }
 
 test_C4() {
-    a_faire "C4" "root verrouillé, répertoires personnels privés"
+    local etat d erreurs=""
+    etat="$(passwd -S root 2>/dev/null | awk '{print $2}')"
+    if [[ "$etat" == "L" ]]; then
+        ok "C4" "compte root verrouillé"
+    else
+        ko "C4" "root n'est pas verrouillé (état '$etat')"
+    fi
+    for d in /home/*/; do
+        [[ "$(stat -c %a "$d")" == "700" ]] || erreurs="$erreurs $d"
+    done
+    if [[ -z "$erreurs" ]]; then
+        ok "C4" "répertoires personnels en 700"
+    else
+        ko "C4" "répertoires trop ouverts :$erreurs"
+    fi
 }
 
 # --- Tests : accès SSH (Mathieu) -----------------------------------------
