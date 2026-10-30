@@ -459,8 +459,49 @@ test_D1() {
     fi
 }
 
+# Écoutes réseau autorisées, au format protocole:port. Toute écoute
+# ajoutée ici doit être expliquée et justifiée dans DOSSIER.md (D2).
+ECOUTES_AUTORISEES=(
+    tcp:22      # SSH, seul service ouvert
+)
+
 test_D2() {
-    a_faire "D2" "aucune écoute réseau hors SSH (ou justifiée)"
+    local proto locale adresse port ecoute
+    local -A vues=()          # écoutes joignables depuis le réseau
+    local non_autorisees=""
+
+    # ss -H : sans en-tête ; -t -u : TCP et UDP ; -l : en écoute ;
+    # -n : ports en chiffres. Colonnes : protocole, état, files d'attente,
+    # adresse locale:port, adresse distante.
+    while read -r proto _ _ _ locale _; do
+        port="${locale##*:}"
+        adresse="${locale%:*}"
+        adresse="${adresse%%\%*}"      # retire l'interface (0.0.0.0%ens33)
+        adresse="${adresse#[}"         # retire les crochets IPv6 ([::])
+        adresse="${adresse%]}"
+        # La boucle locale n'est pas joignable depuis le réseau
+        case "$adresse" in
+            127.*|::1) continue ;;
+        esac
+        vues["$proto:$port"]=1
+    done < <(ss -H -tuln 2>/dev/null)
+
+    for ecoute in "${!vues[@]}"; do
+        if [[ " ${ECOUTES_AUTORISEES[*]} " != *" $ecoute "* ]]; then
+            non_autorisees="$non_autorisees $ecoute"
+        fi
+    done
+
+    if [[ -z "$non_autorisees" ]]; then
+        ok "D2" "aucune écoute réseau hors des ports autorisés (${ECOUTES_AUTORISEES[*]})"
+    else
+        ko "D2" "écoutes réseau non autorisées :$non_autorisees (voir ss -tulpn)"
+    fi
+    if [[ -n "${vues[tcp:22]:-}" ]]; then
+        ok "D2" "SSH écoute bien sur le port 22"
+    else
+        ko "D2" "aucun service n'écoute sur le port 22 (sshd arrêté ?)"
+    fi
 }
 
 test_D3() {
