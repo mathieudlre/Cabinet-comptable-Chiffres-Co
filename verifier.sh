@@ -295,8 +295,41 @@ test_S5() {
 
 # --- Tests : journaux et défense ------------------------------------------
 
+# Prison fail2ban du dépôt, sur le système, et seuil d'échecs maximal
+F2B_CONF_DEPOT="$REPERTOIRE_DEPOT/config/fail2ban/jail.d/sshd.conf"
+F2B_CONF_SYSTEME="/etc/fail2ban/jail.d/sshd.conf"
+F2B_MAX_ECHECS=5      # « après quelques échecs »
+
 test_J1() {
-    a_faire "J1" "fail2ban protège SSH"
+    local valeur
+    if systemctl is-active --quiet fail2ban 2>/dev/null; then
+        ok "J1" "service fail2ban actif"
+    else
+        ko "J1" "service fail2ban arrêté (attendu : actif)"
+    fi
+    if fail2ban-client status sshd >/dev/null 2>&1; then
+        ok "J1" "prison sshd active"
+    else
+        ko "J1" "prison sshd inactive (voir fail2ban-client status)"
+    fi
+    valeur="$(fail2ban-client get sshd maxretry 2>/dev/null)"
+    if [[ "$valeur" =~ ^[0-9]+$ ]] && (( valeur <= F2B_MAX_ECHECS )); then
+        ok "J1" "bannissement après $valeur échecs"
+    else
+        ko "J1" "maxretry vaut '${valeur:-?}' (attendu : $F2B_MAX_ECHECS au plus)"
+    fi
+    # Cohabitation avec le pare-feu (J2) : la table de fail2ban doit
+    # toujours être là, même après un rechargement de nftables.conf
+    if nft list table inet f2b-table >/dev/null 2>&1; then
+        ok "J1" "règles de fail2ban présentes dans nftables (table inet f2b-table)"
+    else
+        ko "J1" "table inet f2b-table absente de nftables (effacée par un flush ruleset ?)"
+    fi
+    if cmp -s "$F2B_CONF_DEPOT" "$F2B_CONF_SYSTEME"; then
+        ok "J1" "$F2B_CONF_SYSTEME identique à la version du dépôt"
+    else
+        ko "J1" "$F2B_CONF_SYSTEME absent ou différent du dépôt (relancer installer.sh)"
+    fi
 }
 
 # Fichier du pare-feu dans le dépôt, sur le système, et chaîne d'entrée
