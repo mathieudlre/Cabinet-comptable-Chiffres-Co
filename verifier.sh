@@ -109,12 +109,76 @@ trap nettoyer EXIT
 # Une fonction par exigence. Une fonction peut appeler ok/ko plusieurs
 # fois : c'est ainsi qu'on atteint les 25 tests demandés.
 
+
+# "C1" "comptes et groupes conformes à $FICHIER_COMPTES"
 test_C1() {
-    a_faire "C1" "comptes et groupes conformes à $FICHIER_COMPTES"
+    local erreurs="" login nom principal secondaires g
+    while IFS=';' read -r login nom principal secondaires; do
+        if ! getent passwd "$login" > /dev/null; then
+            erreurs="$erreurs $login(absent)"
+            continue
+        fi
+        if [[ "$(id -gn "$login")" != "$principal" ]]; then
+            erreurs="$erreurs $login(mauvais groupe principal)"
+        fi
+        for g in ${secondaires//,/ }; do
+            if ! id -nG "$login" | grep -qw "$g"; then
+                erreurs="$erreurs $login(pas dans $g)"
+            fi
+        done
+    done < <(tail -n +2 "$FICHIER_COMPTES")
+
+    if [[ -z "$erreurs" ]]; then
+        ok "C1" "tous les comptes et groupes de comptes.csv existent"
+    else
+        ko "C1" "écarts avec comptes.csv :$erreurs"
+    fi
 }
 
+
+#"C2" "droits et ACL des répertoires de /srv"
 test_C2() {
-    a_faire "C2" "droits et ACL des répertoires de /srv"
+    local erreurs=""
+    local f="/srv/dossiers_clients/.verif_c2_$$"
+    A_NETTOYER+=("$f")
+
+    # Ce qui doit marcher
+    sudo -u mdupuis test -w /srv/dossiers_clients || erreurs="$erreurs [comptable devrait écrire dans dossiers_clients]"
+    sudo -u fgarcia test -r /srv/dossiers_clients || erreurs="$erreurs [direction devrait lire dossiers_clients]"
+    sudo -u cmoreau test -w /srv/rh || erreurs="$erreurs [rh devrait écrire dans rh]"
+    sudo -u fgarcia test -r /srv/rh || erreurs="$erreurs [direction devrait lire rh]"
+    sudo -u tbernard test -r /srv/commun || erreurs="$erreurs [stagiaire devrait lire commun]"
+    sudo -u tbernard test -w /srv/commun/depot || erreurs="$erreurs [stagiaire devrait déposer dans depot]"
+
+    # Ce qui doit être refusé
+    sudo -u cmoreau test -r /srv/dossiers_clients && erreurs="$erreurs [rh ne devrait pas lire dossiers_clients]"
+    sudo -u tbernard test -r /srv/dossiers_clients && erreurs="$erreurs [stagiaire ne devrait pas lire dossiers_clients]"
+    sudo -u fgarcia test -w /srv/dossiers_clients && erreurs="$erreurs [direction ne devrait pas écrire dans dossiers_clients]"
+    sudo -u mdupuis test -r /srv/rh && erreurs="$erreurs [comptable ne devrait pas lire rh]"
+    sudo -u tbernard test -w /srv/commun && erreurs="$erreurs [stagiaire ne devrait pas écrire dans commun]"
+    sudo -u tbernard test -r /srv/commun/depot && erreurs="$erreurs [stagiaire ne devrait pas lister depot]"
+
+    # Fichier créé après coup : l'ACL par défaut doit s'appliquer
+    sudo -u mdupuis touch "$f" 2>/dev/null
+    sudo -u fgarcia test -r "$f" || erreurs="$erreurs [direction devrait lire un fichier créé après coup]"
+    sudo -u cmoreau test -r "$f" && erreurs="$erreurs [rh ne devrait pas lire un fichier créé après coup]"
+
+    # Dépôt des stagiaires : déposer oui, lister / lire / supprimer non
+    local d="/srv/commun/depot/.verif_depot_$$"
+    A_NETTOYER+=("$d")
+    echo "test" | sudo -u tbernard tee "$d" > /dev/null 2>&1
+    [[ -f "$d" ]] || erreurs="$erreurs [stagiaire devrait pouvoir déposer dans depot]"
+    sudo -u tbernard ls /srv/commun/depot > /dev/null 2>&1 && erreurs="$erreurs [stagiaire ne devrait pas lister depot]"
+    sudo -u emeunier cat "$d" > /dev/null 2>&1 && erreurs="$erreurs [un stagiaire ne devrait pas lire le fichier d'un autre]"
+    sudo -u fgarcia cat "$d" > /dev/null 2>&1 || erreurs="$erreurs [direction devrait lire un fichier déposé]"
+    sudo -u emeunier rm -f "$d" 2>/dev/null
+    [[ -e "$d" ]] || erreurs="$erreurs [un stagiaire a pu supprimer le fichier d'un autre (sticky bit)]"
+
+    if [[ -z "$erreurs" ]]; then
+        ok "C2" "droits de /srv conformes, y compris sur un fichier créé après coup"
+    else
+        ko "C2" "droits non conformes :$erreurs"
+    fi
 }
 
 test_C3() {
@@ -232,7 +296,16 @@ test_S5() {
 # --- Tests : journaux et défense ------------------------------------------
 
 test_J1() {
-        # Règles réellement chargées dans le noyau (pas celles du fichier)
+    a_faire "J1" "fail2ban protège SSH"
+}
+
+# Fichier du pare-feu dans le dépôt, sur le système, et chaîne d'entrée
+NFT_CONF_DEPOT="$REPERTOIRE_DEPOT/config/nftables.conf"
+NFT_CONF_SYSTEME="/etc/nftables.conf"
+NFT_CHAINE_ENTREE="inet filtre entree"
+
+test_J2() {
+    # Règles réellement chargées dans le noyau (pas celles du fichier)
     local regles politique
     # shellcheck disable=SC2086  # découpage voulu : famille, table, chaîne
     regles="$(nft list chain $NFT_CHAINE_ENTREE 2>/dev/null)"
@@ -256,7 +329,7 @@ test_J1() {
             ko "J2" "connexions établies non acceptées (attendu : ct state established,related accept)"
         fi
     fi
- 
+
     # La règle survit au redémarrage : service activé, fichier conforme
     if systemctl is-enabled --quiet nftables 2>/dev/null; then
         ok "J2" "service nftables activé au démarrage"
@@ -268,10 +341,6 @@ test_J1() {
     else
         ko "J2" "$NFT_CONF_SYSTEME absent ou différent du dépôt (relancer installer.sh)"
     fi
-}
-
-test_J2() {
-    a_faire "J2" "nftables : politique drop en entrée, SSH et établies acceptés"
 }
 
 test_J3() {
@@ -303,7 +372,18 @@ test_B4() {
 # --- Tests : système ------------------------------------------------------
 
 test_D1() {
-    a_faire "D1" "mises à jour de sécurité automatiques"
+    local erreurs=""
+    dpkg -s unattended-upgrades 2>/dev/null | grep -q "Status: install ok installed" || erreurs="$erreurs [paquet unattended-upgrades non installé]"
+    apt-config dump APT::Periodic::Update-Package-Lists | grep -q '"1"' || erreurs="$erreurs [Update-Package-Lists n'est pas à 1]"
+    apt-config dump APT::Periodic::Unattended-Upgrade | grep -q '"1"' || erreurs="$erreurs [Unattended-Upgrade n'est pas à 1]"
+    systemctl is-enabled --quiet apt-daily-upgrade.timer || erreurs="$erreurs [timer apt-daily-upgrade non activé]"
+    systemctl is-active --quiet apt-daily-upgrade.timer || erreurs="$erreurs [timer apt-daily-upgrade inactif]"
+
+    if [[ -z "$erreurs" ]]; then
+        ok "D1" "mises à jour de sécurité automatiques actives (paquet, configuration, timer)"
+    else
+        ko "D1" "mises à jour automatiques non conformes :$erreurs"
+    fi
 }
 
 test_D2() {
