@@ -267,11 +267,25 @@ configurer_mises_a_jour() {
 
 preparer_disque_sauvegarde() {
     etape "Disque de sauvegarde (B1, B3)"
-    # À FOURNIR PAR LE MEMBRE 1 : identifier le second disque, le formater
-    # UNIQUEMENT s'il n'a pas de système de fichiers, le monter par UUID
-    # sur $POINT_MONTAGE via /etc/fstab, droits réservés aux admins (B3).
-    # Règle absolue : une relance ne doit jamais effacer les sauvegardes.
-    absent "préparation du disque monté sur $POINT_MONTAGE"
+    local disque="/dev/sdb" uuid
+    [[ -b "$disque" ]] || erreur "disque de sauvegarde $disque introuvable"
+    if blkid "$disque" >/dev/null 2>&1; then
+        info "$disque a déjà un système de fichiers, pas de formatage"
+    else
+        mkfs.ext4 -q -L sauvegarde "$disque"
+        info "$disque formaté en ext4"
+    fi
+    uuid="$(blkid -s UUID -o value "$disque")"
+    mkdir -p "$POINT_MONTAGE"
+    if ! grep -q "UUID=$uuid" /etc/fstab; then
+        echo "UUID=$uuid $POINT_MONTAGE ext4 defaults,nofail 0 2" >> /etc/fstab
+        info "ajouté à /etc/fstab"
+    fi
+    systemctl daemon-reload
+    mountpoint -q "$POINT_MONTAGE" || mount "$POINT_MONTAGE"
+    chown root:admins "$POINT_MONTAGE"
+    chmod 750 "$POINT_MONTAGE"
+    info "monté sur $POINT_MONTAGE (root:admins, 750)"
 }
 
 installer_scripts() {

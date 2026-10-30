@@ -1,0 +1,9 @@
+[Unit]
+Description=Sauvegarde quotidienne (B2)
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
