@@ -514,6 +514,7 @@ test_B4() {
 
 # --- Tests : système ------------------------------------------------------
 
+"D1" "mises à jour de sécurité automatiques"
 test_D1() {
     local erreurs=""
     dpkg -s unattended-upgrades 2>/dev/null | grep -q "Status: install ok installed" || erreurs="$erreurs [paquet unattended-upgrades non installé]"
@@ -577,7 +578,30 @@ test_D2() {
 }
 
 test_D3() {
-    a_faire "D3" "aucun fichier modifiable par tous, SUID conformes à la liste"
+    local erreurs="" modifiables ecart
+    local liste="$REPERTOIRE_DEPOT/config/suid_attendus.txt"
+
+    # Fichiers et répertoires modifiables par tous, hors /tmp et /var/tmp (temporaires)
+    modifiables="$(find / -xdev \( -path /tmp -o -path /var/tmp \) -prune -o \( -type f -o -type d \) -perm -0002 -print 2>/dev/null)"
+    if [[ -n "$modifiables" ]]; then
+        erreurs="$erreurs [modifiables par tous : $(tr '\n' ' ' <<< "$modifiables")]"
+    fi
+
+    # Fichiers SUID : l'état réel doit être identique à la liste du dépôt
+    if [[ ! -f "$liste" ]]; then
+        erreurs="$erreurs [liste config/suid_attendus.txt absente]"
+    else
+        ecart="$(diff <(find / -xdev -type f -perm -4000 2>/dev/null | LC_ALL=C sort) "$liste" | grep '^[<>]' | tr '\n' ' ')"
+        if [[ -n "$ecart" ]]; then
+            erreurs="$erreurs [SUID différents de la liste : $ecart]"
+        fi
+    fi
+
+    if [[ -z "$erreurs" ]]; then
+        ok "D3" "aucun fichier modifiable par tous (hors temporaires), SUID conformes à la liste"
+    else
+        ko "D3" "permissions non conformes :$erreurs"
+    fi
 }
 
 # --- Programme principal --------------------------------------------------
