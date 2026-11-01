@@ -44,6 +44,43 @@
 - Sticky bit (`1770`) : seuls le propriétaire du fichier, celui du répertoire et root peuvent supprimer ou renommer. Testé : `rm` et `mv` par un autre stagiaire donnent « Opération non permise ».
 - Contrepartie : comptables, rh et direction lisent et modifient un fichier déposé, mais ne peuvent pas le supprimer.
 
+### C3 : sudo
+
+- Une règle par groupe (`%admins`) plutôt que par personne : ajouter un administrateur se fait dans `comptes.csv`, sans toucher au sudoers.
+- `support` : une seule commande, en chemin absolu. Sans chemin absolu, il pourrait lancer un autre script portant le même nom.
+- `NOPASSWD` pour `support` uniquement : les comptes n'ont pas de mot de passe (connexion par clé), donc sans lui `support` ne pourrait jamais lancer le script. Le risque reste limité : une seule commande, et le script appartient à root et n'est pas modifiable par `support` (sinon il y mettrait `bash` et deviendrait root).
+- Fichier nommé `admins_support`, sans point : sudo ignore en silence les fichiers de `sudoers.d` dont le nom contient un point.
+- Validation avec `visudo -cf` avant installation : un sudoers invalide peut casser sudo pour tout le monde.
+- Debian donne sudo au compte créé à l'installation (groupe `sudo`) : `installer.sh` vide ce groupe.
+
+### C4 : root et répertoires personnels
+
+- Root n'est verrouillé que si un membre d'`admins` a une règle sudo : sinon la machine deviendrait inadministrable.
+- `HOME_MODE 0700` dans `/etc/login.defs` : les comptes créés plus tard ont aussi un répertoire privé, pas seulement ceux qui existent aujourd'hui.
+
+### J3 : journal persistant
+
+- `Storage=persistent` plutôt que `auto` : avec `auto`, le journal n'est gardé sur disque que si `/var/log/journal` existe déjà. `persistent` crée le dossier lui-même, donc les journaux survivent toujours à un redémarrage.
+
+### J4 : analyse des journaux
+
+- Debian 13 minimale n'a pas de `/var/log/auth.log` : sshd écrit dans le journal systemd, lu avec `journalctl -u ssh`.
+- La connexion par mot de passe étant désactivée, il n'y a pas de lignes `Failed password` : un échec apparaît comme `Connection reset by invalid user <compte> <IP>`. Le script a été écrit à partir de ces lignes réelles.
+- Seuil par défaut : 5 échecs par IP sur la période. Au-delà, ce n'est plus une faute de frappe mais une tentative répétée, cohérente avec le bannissement de fail2ban.
+- Codes de sortie distincts (0, 1, 2) : le script peut être utilisé par un autre outil (supervision, cron) sans lire son texte.
+
+### B : sauvegarde
+
+- Second disque : une panne ou un effacement du disque système ne touche pas les sauvegardes.
+- Formatage uniquement si `blkid` ne trouve aucun système de fichiers : relancer `installer.sh` n'efface jamais les sauvegardes.
+- Montage par UUID : le nom `sdb` peut changer d'un démarrage à l'autre, l'UUID non. `nofail` : si le disque manque, la machine démarre quand même.
+- `rsync -aAX` : conserve droits, propriétaires, ACL et attributs étendus, indispensables pour restaurer `/srv`.
+- `--link-dest` : un fichier inchangé n'est stocké qu'une fois et partagé entre les versions. Chaque version est complète, mais ne prend que la place des fichiers modifiés.
+- 7 versions avec une sauvegarde par jour : une semaine d'historique, sur un disque de 2 Go.
+- 02:00 : personne ne travaille au cabinet à cette heure-là. `Persistent=true` : si la machine était éteinte à 2 h, la sauvegarde est rattrapée au démarrage.
+- `flock` : deux sauvegardes simultanées (timer + lancement manuel) pourraient corrompre une version.
+- `/backup` en `root:admins 750` : les sauvegardes contiennent les données de tous les services ; un comptable ne doit pas pouvoir y lire les fichiers RH.
+
 ### D1 : mises à jour automatiques
 
 - Mise à jour quotidienne : une faille connue est corrigée vite, sans intervention.
