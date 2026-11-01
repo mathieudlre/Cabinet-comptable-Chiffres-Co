@@ -6,8 +6,8 @@
 | --- | --- | --- | --- |
 | C1 | `creer_comptes.sh` lit `comptes.csv` et crée les groupes, les comptes et installe les clés SSH (une clé par compte). Il teste l'existence avant chaque création : on peut le relancer sans doublon. Les administrateurs ont des comptes nominatifs, sans mot de passe. | `test_C1` | R33 |
 | C2 | `creer_comptes.sh` crée les 4 répertoires de `/srv` : `chmod 770`, puis ACL (`setfacl -m`) et ACL par défaut (`setfacl -d -m`) pour les fichiers futurs. `depot` : stagiaires en dépôt seul, sticky bit (`1770`) et `default:group::---`. | `test_C2` | §3.2 (moindre privilège) |
-| C3 | | `test_C3` | |
-| C4 | | `test_C4` | |
+| C3 | `config/sudoers.d/admins_support` : `%admins` a tous les droits ; `support` peut lancer uniquement `/usr/local/sbin/analyse_logs.sh` en root (`NOPASSWD`). `installer.sh` valide le fichier avec `visudo -cf` et vide le groupe `sudo` de Debian (compte créé à l'installation). | `test_C3` | |
+| C4 | `installer.sh` verrouille root (`passwd -l root`) seulement si un admin avec une règle sudo existe ; répertoires personnels en 700 ; `HOME_MODE 0700` dans `/etc/login.defs` pour les futurs comptes. | `test_C4` | |
 | S1 | | `test_S1` | |
 | S2 | | `test_S2` | |
 | S3 | | `test_S3` | |
@@ -15,12 +15,12 @@
 | S5 | | `test_S5` | |
 | J1 | | `test_J1` | |
 | J2 | | `test_J2` | |
-| J3 | | `test_J3` | |
-| J4 | | `test_J4` | |
-| B1 | | `test_B1` | |
-| B2 | | `test_B2` | |
-| B3 | | `test_B3` | |
-| B4 | | `test_B4` | |
+| J3 | `config/journald.conf` (`Storage=persistent`) installé dans `/etc/systemd/journald.conf.d/` : les journaux sont gardés sur disque dans `/var/log/journal`. | `test_J3` | |
+| J4 | `analyse_logs.sh` lit `journalctl -u ssh` : échecs par IP, comptes visés, connexions réussies. Seuil (`-s`, 5 par défaut) et période (`-p`) en arguments. Codes de sortie : 0 conforme, 1 alerte, 2 erreur d'usage. Installé en `root:root 755` dans `/usr/local/sbin`. | `test_J4` | |
+| B1 | `sauvegarde.sh` : `rsync -aAXH` de `/srv` et `/etc` vers un dossier daté de `/backup`, `--link-dest` vers la version précédente (fichiers inchangés partagés), rotation à 7 versions, `flock` contre deux exécutions simultanées. | `test_B1` | |
+| B2 | `sauvegarde.timer` (systemd) : tous les jours à 02:00, `Persistent=true`. Chaque exécution est journalisée (`logger`, visible avec `journalctl -u sauvegarde.service`). | `test_B2` | |
+| B3 | Second disque formaté uniquement s'il est vierge (`blkid`), monté par UUID sur `/backup` via `/etc/fstab` (`nofail`), en `root:admins 750`. | `test_B3` | |
+| B4 | Restauration testée : fichier de `/srv` supprimé puis restauré avec `cp -a`, contenu et ACL identiques (`getfacl`). Procédure détaillée en partie 4. | `test_B4` | |
 | D1 | `unattended-upgrades` installé ; `config/apt/20auto-upgrades` lance la mise à jour des listes et l'installation une fois par jour. Origines autorisées (vérifié avec `--dry-run --debug`) : Debian stable `trixie` et Debian-Security ; `trixie-updates` exclue. | `test_D1` | R61 |
 | D2 | | `test_D2` | |
 | D3 | Aucun fichier modifiable par tous hors `/tmp` et `/var/tmp` (sticky bit). Les 12 fichiers SUID sont listés dans `config/suid_attendus.txt`, expliqués, et comparés à l'état réel (on ne les supprime pas : le système en a besoin). | `test_D3` | R54, R56, R57 |
