@@ -65,3 +65,26 @@
 - **Élévation de privilèges par un binaire SUID ou un fichier modifiable par tous** : `test_D3` détecte un nouveau SUID ou un fichier modifiable. Non couvert : le test ne détecte qu'au moment où on lance `verifier.sh`, pas en temps réel.
 
 ## 4. Procédure de restauration
+
+Les sauvegardes sont sur le second disque, monté sur `/backup` (accessible aux seuls membres d'`admins`).
+Chaque version est un dossier daté `AAAA-MM-JJ_HHMMSS` qui contient une copie complète de `/srv` et `/etc`.
+
+**Restaurer un fichier supprimé** (exemple : `/srv/dossiers_clients/facture.txt`) :
+
+1. Se connecter avec un compte du groupe `admins`.
+2. Lister les versions disponibles et choisir celle d'avant la suppression :
+   `sudo ls /backup`
+3. Vérifier que le fichier est présent dans cette version :
+   `sudo ls -l /backup/2026-10-31_003455/srv/dossiers_clients/`
+4. Le recopier à sa place en conservant droits, propriétaire et ACL (`-a`) :
+   `sudo cp -a /backup/2026-10-31_003455/srv/dossiers_clients/facture.txt /srv/dossiers_clients/`
+5. Vérifier le contenu et les ACL :
+   `sudo cat /srv/dossiers_clients/facture.txt`
+   `sudo getfacl /srv/dossiers_clients/facture.txt`
+
+**Test réalisé :** fichier créé, sauvegardé, supprimé puis restauré. Le contenu et les ACL
+(`group:comptables:rwx`, `group:direction:r-x`) sont identiques avant et après.
+
+**Restaurer un répertoire entier** : même principe avec `rsync -aAX`, qui conserve aussi
+les ACL et les attributs étendus :
+`sudo rsync -aAX /backup/<version>/srv/rh/ /srv/rh/`
