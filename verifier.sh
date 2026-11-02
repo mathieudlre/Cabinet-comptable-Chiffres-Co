@@ -47,22 +47,17 @@ ok() {
 }
 
 # ko ID MESSAGE : enregistre et affiche un test échoué.
-# Le message doit dire ce qui est attendu, pour guider la correction.
 ko() {
     NB_TESTS=$((NB_TESTS + 1))
     printf '%s[KO]%s %s %s\n' "$ROUGE" "$NORMAL" "$1" "$2"
 }
 
-# a_faire ID DESCRIPTION : test pas encore écrit, compté comme un échec
-# pour qu'un oubli ne passe jamais pour une conformité.
 a_faire() {
     ko "$1" "non implémenté : $2"
 }
 
 # --- Outils pour les tests ------------------------------------------------
 
-# en_tant_que UTILISATEUR COMMANDE... : lance une commande avec les droits
-# d'un autre utilisateur, sans afficher sa sortie, et renvoie son code.
 # Exemple : en_tant_que stagiaire1 test -r /srv/rh
 en_tant_que() {
     local utilisateur="$1"
