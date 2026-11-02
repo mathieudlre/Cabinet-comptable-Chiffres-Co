@@ -4,11 +4,6 @@
 # Projet XTI302-CYB, contexte B : cabinet comptable Chiffres & Co.
 #
 # Usage : ./installer.sh     (en root, depuis le dépôt cloné sur la VM)
-#
-# Tant que le projet n'est pas terminé, une étape dont le fichier de config
-# n'existe pas encore dans le dépôt est signalée « absent » puis sautée.
-# Version finale attendue : aucun « absent » dans le résumé.
-#
 # Code de sortie : 0 si l'installation s'est déroulée jusqu'au bout,
 #                  1 si une étape a échoué (le script s'arrête aussitôt),
 #                  2 en cas d'erreur d'utilisation.
