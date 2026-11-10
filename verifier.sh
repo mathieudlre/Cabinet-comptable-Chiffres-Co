@@ -1,32 +1,13 @@
-#!/usr/bin/env bash
-#
-# verifier.sh - vérifie la conformité du serveur au cahier des charges
-# Projet XTI302-CYB, contexte B : cabinet comptable Chiffres & Co.
-#
-# Usage : ./verifier.sh                 lance tous les tests
-#         ./verifier.sh test_S2 test_C3  lance seulement les tests nommés
-#
-# Code de sortie : 0 si tout est conforme,
-#                  1 si au moins un test échoue,
-#                  2 en cas d'erreur d'utilisation.
-
 set -u
 
-# --- Emplacements ---------------------------------------------------------
-
-# Dossier du dépôt, quel que soit le répertoire d'où le script est lancé
 REPERTOIRE_DEPOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FICHIER_COMPTES="$REPERTOIRE_DEPOT/comptes.csv"
-
-# --- Compteurs et état ----------------------------------------------------
 
 NB_TESTS=0
 NB_OK=0
 
-# Fichiers de test à supprimer en fin de script
 A_NETTOYER=()
 
-# Couleurs seulement si la sortie est un terminal (pas dans un fichier)
 if [[ -t 1 ]]; then
     VERT=$'\e[32m'
     ROUGE=$'\e[31m'
@@ -37,16 +18,12 @@ else
     NORMAL=""
 fi
 
-# --- Affichage des résultats ----------------------------------------------
-
-# ok ID MESSAGE : enregistre et affiche un test réussi
 ok() {
     NB_TESTS=$((NB_TESTS + 1))
     NB_OK=$((NB_OK + 1))
     printf '%s[OK]%s %s %s\n' "$VERT" "$NORMAL" "$1" "$2"
 }
 
-# ko ID MESSAGE : enregistre et affiche un test échoué.
 ko() {
     NB_TESTS=$((NB_TESTS + 1))
     printf '%s[KO]%s %s %s\n' "$ROUGE" "$NORMAL" "$1" "$2"
@@ -56,24 +33,16 @@ a_faire() {
     ko "$1" "non implémenté : $2"
 }
 
-# --- Outils pour les tests ------------------------------------------------
-
-# Exemple : en_tant_que stagiaire1 test -r /srv/rh
 en_tant_que() {
     local utilisateur="$1"
     shift
     sudo -n -u "$utilisateur" -- "$@" >/dev/null 2>&1
 }
 
-# sshd_valeur MOT_CLE : valeur effective d'une option du serveur SSH.
-# sshd -T affiche la configuration finale, mots-clés en minuscules.
-# awk lit toute la sortie (pas de sortie anticipée, donc pas de SIGPIPE).
 sshd_valeur() {
     sshd -T 2>/dev/null | awk -v cle="$1" '$1 == cle { print $2 }'
 }
 
-# en_secondes DUREE : convertit une durée au format sshd (600, 90s, 10m,
-# 1h) en secondes. N'affiche rien si le format n'est pas reconnu.
 en_secondes() {
     if [[ "$1" =~ ^([0-9]+)([smh]?)$ ]]; then
         local nombre="${BASH_REMATCH[1]}"
@@ -85,13 +54,10 @@ en_secondes() {
     fi
 }
 
-# a_nettoyer CHEMIN : note un fichier de test à supprimer à la fin
 a_nettoyer() {
     A_NETTOYER+=("$1")
 }
 
-# nettoyer : supprime les fichiers de test. Appelée automatiquement à la
-# sortie du script, même en cas d'erreur ou de Ctrl+C, grâce à trap.
 nettoyer() {
     local chemin
     for chemin in "${A_NETTOYER[@]}"; do
@@ -100,12 +66,7 @@ nettoyer() {
 }
 trap nettoyer EXIT
 
-# --- Tests : comptes et droits (Charles) ---------------------------------
-# Une fonction par exigence. Une fonction peut appeler ok/ko plusieurs
-# fois : c'est ainsi qu'on atteint les 25 tests demandés.
 
-
-# "C1" "comptes et groupes conformes à $FICHIER_COMPTES"
 test_C1() {
     local erreurs="" login nom principal secondaires g
     while IFS=';' read -r login nom principal secondaires; do
@@ -131,13 +92,11 @@ test_C1() {
 }
 
 
-#"C2" "droits et ACL des répertoires de /srv"
 test_C2() {
     local erreurs=""
     local f="/srv/dossiers_clients/.verif_c2_$$"
     A_NETTOYER+=("$f")
 
-    # Ce qui doit marcher
     sudo -u mdupuis test -w /srv/dossiers_clients || erreurs="$erreurs [comptable devrait écrire dans dossiers_clients]"
     sudo -u fgarcia test -r /srv/dossiers_clients || erreurs="$erreurs [direction devrait lire dossiers_clients]"
     sudo -u cmoreau test -w /srv/rh || erreurs="$erreurs [rh devrait écrire dans rh]"
@@ -145,7 +104,6 @@ test_C2() {
     sudo -u tbernard test -r /srv/commun || erreurs="$erreurs [stagiaire devrait lire commun]"
     sudo -u tbernard test -w /srv/commun/depot || erreurs="$erreurs [stagiaire devrait déposer dans depot]"
 
-    # Ce qui doit être refusé
     sudo -u cmoreau test -r /srv/dossiers_clients && erreurs="$erreurs [rh ne devrait pas lire dossiers_clients]"
     sudo -u tbernard test -r /srv/dossiers_clients && erreurs="$erreurs [stagiaire ne devrait pas lire dossiers_clients]"
     sudo -u fgarcia test -w /srv/dossiers_clients && erreurs="$erreurs [direction ne devrait pas écrire dans dossiers_clients]"
@@ -153,12 +111,10 @@ test_C2() {
     sudo -u tbernard test -w /srv/commun && erreurs="$erreurs [stagiaire ne devrait pas écrire dans commun]"
     sudo -u tbernard test -r /srv/commun/depot && erreurs="$erreurs [stagiaire ne devrait pas lister depot]"
 
-    # Fichier créé après coup : l'ACL par défaut doit s'appliquer
     sudo -u mdupuis touch "$f" 2>/dev/null
     sudo -u fgarcia test -r "$f" || erreurs="$erreurs [direction devrait lire un fichier créé après coup]"
     sudo -u cmoreau test -r "$f" && erreurs="$erreurs [rh ne devrait pas lire un fichier créé après coup]"
 
-    # Dépôt des stagiaires : déposer oui, lister / lire / supprimer non
     local d="/srv/commun/depot/.verif_depot_$$"
     A_NETTOYER+=("$d")
     echo "test" | sudo -u tbernard tee "$d" > /dev/null 2>&1
@@ -215,7 +171,6 @@ test_C4() {
     fi
 }
 
-# --- Tests : accès SSH (Mathieu) -----------------------------------------
 
 test_S1() {
     local valeur cle
@@ -235,7 +190,6 @@ test_S1() {
     done
 }
 
-# Exemple de test complet, sur le modèle du sujet
 test_S2() {
     local valeur
     valeur="$(sshd_valeur permitrootlogin)"
@@ -254,7 +208,6 @@ test_S3() {
     else
         ko "S3" "AllowGroups vaut '${valeur:-?}' (attendu : acces_ssh seul)"
     fi
-    # Un AllowGroups vers un groupe inexistant refuserait tout le monde
     if getent group acces_ssh >/dev/null; then
         ok "S3" "le groupe acces_ssh existe"
     else
@@ -262,7 +215,6 @@ test_S3() {
     fi
 }
 
-# Valeurs maximales imposées par le cahier des charges
 MAX_ESSAIS=4
 MAX_INACTIVITE=900    # 15 minutes, en secondes
 
@@ -275,8 +227,6 @@ test_S4() {
         ko "S4" "MaxAuthTries vaut '${valeur:-?}' (attendu : $MAX_ESSAIS au plus)"
     fi
  
-    # ChannelTimeout peut lister plusieurs types (session=..., x11=...) :
-    # on extrait celui des sessions.
     ligne="$(sshd -T 2>/dev/null | awk '$1 == "channeltimeout"')"
     valeur="$(grep -o 'session=[^ ]*' <<< "$ligne")"
     duree="$(en_secondes "${valeur#session=}")"
@@ -299,14 +249,11 @@ SSH_CONF_DEPOT="$REPERTOIRE_DEPOT/config/ssh/sshd_config.d/10-durcissement.conf"
 SSH_CONF_SYSTEME="/etc/ssh/sshd_config.d/10-durcissement.conf"
  
 test_S5() {
-    # La config installée doit être identique à celle du dépôt :
-    # toute modification à la main est détectée.
     if cmp -s "$SSH_CONF_DEPOT" "$SSH_CONF_SYSTEME"; then
         ok "S5" "$SSH_CONF_SYSTEME identique à la version du dépôt"
     else
         ko "S5" "$SSH_CONF_SYSTEME absent ou différent du dépôt (relancer installer.sh)"
     fi
-    # Sans la ligne Include, les fichiers de sshd_config.d sont ignorés
     if grep -Eq '^[[:space:]]*Include[[:space:]]+/etc/ssh/sshd_config\.d/\*\.conf' /etc/ssh/sshd_config; then
         ok "S5" "sshd_config inclut bien sshd_config.d"
     else
@@ -319,12 +266,9 @@ test_S5() {
     fi
 }
 
-# --- Tests : journaux et défense ------------------------------------------
-
-# Prison fail2ban du dépôt, sur le système, et seuil d'échecs maximal
 F2B_CONF_DEPOT="$REPERTOIRE_DEPOT/config/fail2ban/jail.d/sshd.conf"
 F2B_CONF_SYSTEME="/etc/fail2ban/jail.d/sshd.conf"
-F2B_MAX_ECHECS=5      # « après quelques échecs »
+F2B_MAX_ECHECS=5
 
 test_J1() {
     local valeur
@@ -344,8 +288,6 @@ test_J1() {
     else
         ko "J1" "maxretry vaut '${valeur:-?}' (attendu : $F2B_MAX_ECHECS au plus)"
     fi
-    # Cohabitation avec le pare-feu (J2) : la table de fail2ban doit
-    # toujours être là, même après un rechargement de nftables.conf
     if nft list table inet f2b-table >/dev/null 2>&1; then
         ok "J1" "règles de fail2ban présentes dans nftables (table inet f2b-table)"
     else
@@ -358,15 +300,12 @@ test_J1() {
     fi
 }
 
-# Fichier du pare-feu dans le dépôt, sur le système, et chaîne d'entrée
 NFT_CONF_DEPOT="$REPERTOIRE_DEPOT/config/nftables.conf"
 NFT_CONF_SYSTEME="/etc/nftables.conf"
 NFT_CHAINE_ENTREE="inet filtre entree"
 
 test_J2() {
-    # Règles réellement chargées dans le noyau (pas celles du fichier)
     local regles politique
-    # shellcheck disable=SC2086  # découpage voulu : famille, table, chaîne
     regles="$(nft list chain $NFT_CHAINE_ENTREE 2>/dev/null)"
     if [[ -z "$regles" ]]; then
         ko "J2" "chaîne $NFT_CHAINE_ENTREE absente : pare-feu non chargé"
@@ -389,7 +328,6 @@ test_J2() {
         fi
     fi
 
-    # La règle survit au redémarrage : service activé, fichier conforme
     if systemctl is-enabled --quiet nftables 2>/dev/null; then
         ok "J2" "service nftables activé au démarrage"
     else
@@ -440,7 +378,6 @@ test_J4() {
     fi
 }
 
-# --- Tests : sauvegarde (Hussein) ----------------------------------------
 
 test_B1() {
     local versions n
@@ -507,9 +444,7 @@ test_B4() {
     fi
 }
 
-# --- Tests : système ------------------------------------------------------
 
-"D1" "mises à jour de sécurité automatiques"
 test_D1() {
     local erreurs=""
     dpkg -s unattended-upgrades 2>/dev/null | grep -q "Status: install ok installed" || erreurs="$erreurs [paquet unattended-upgrades non installé]"
@@ -525,29 +460,23 @@ test_D1() {
     fi
 }
 
-# Écoutes réseau autorisées, au format protocole:port. Toute écoute
-# ajoutée ici doit être expliquée et justifiée dans DOSSIER.md (D2).
 ECOUTES_AUTORISEES=(
-    tcp:22      # SSH, seul service ouvert
-    udp:68      # client DHCP (dhcpcd) : obtient l'adresse IPv4 de la VM
-    udp:546     # client DHCPv6 (dhcpcd) : configuration IPv6, lien local seulement
+    tcp:22
+    udp:68
+    udp:546
 )
 
 test_D2() {
     local proto locale adresse port ecoute
-    local -A vues=()          # écoutes joignables depuis le réseau
+    local -A vues=()
     local non_autorisees=""
 
-    # ss -H : sans en-tête ; -t -u : TCP et UDP ; -l : en écoute ;
-    # -n : ports en chiffres. Colonnes : protocole, état, files d'attente,
-    # adresse locale:port, adresse distante.
     while read -r proto _ _ _ locale _; do
         port="${locale##*:}"
         adresse="${locale%:*}"
-        adresse="${adresse%%\%*}"      # retire l'interface (0.0.0.0%ens33)
-        adresse="${adresse#[}"         # retire les crochets IPv6 ([::])
+        adresse="${adresse%%\%*}"
+        adresse="${adresse#[}"
         adresse="${adresse%]}"
-        # La boucle locale n'est pas joignable depuis le réseau
         case "$adresse" in
             127.*|::1) continue ;;
         esac
@@ -573,35 +502,9 @@ test_D2() {
 }
 
 test_D3() {
-    local erreurs="" modifiables ecart
-    local liste="$REPERTOIRE_DEPOT/config/suid_attendus.txt"
-
-    # Fichiers et répertoires modifiables par tous, hors /tmp et /var/tmp (temporaires)
-    modifiables="$(find / -xdev \( -path /tmp -o -path /var/tmp \) -prune -o \( -type f -o -type d \) -perm -0002 -print 2>/dev/null)"
-    if [[ -n "$modifiables" ]]; then
-        erreurs="$erreurs [modifiables par tous : $(tr '\n' ' ' <<< "$modifiables")]"
-    fi
-
-    # Fichiers SUID : l'état réel doit être identique à la liste du dépôt
-    if [[ ! -f "$liste" ]]; then
-        erreurs="$erreurs [liste config/suid_attendus.txt absente]"
-    else
-        ecart="$(diff <(find / -xdev -type f -perm -4000 2>/dev/null | LC_ALL=C sort) "$liste" | grep '^[<>]' | tr '\n' ' ')"
-        if [[ -n "$ecart" ]]; then
-            erreurs="$erreurs [SUID différents de la liste : $ecart]"
-        fi
-    fi
-
-    if [[ -z "$erreurs" ]]; then
-        ok "D3" "aucun fichier modifiable par tous (hors temporaires), SUID conformes à la liste"
-    else
-        ko "D3" "permissions non conformes :$erreurs"
-    fi
+    a_faire "D3" "aucun fichier modifiable par tous, SUID conformes à la liste"
 }
 
-# --- Programme principal --------------------------------------------------
-
-# Ordre d'exécution de tous les tests
 TOUS_LES_TESTS=(
     test_C1 test_C2 test_C3 test_C4
     test_S1 test_S2 test_S3 test_S4 test_S5
@@ -634,13 +537,11 @@ main() {
 
     verifier_prerequis
 
-    # Tests demandés en argument, sinon tous
     local tests=("$@")
     if [[ ${#tests[@]} -eq 0 ]]; then
         tests=("${TOUS_LES_TESTS[@]}")
     fi
 
-    # Refuser un nom inconnu avant de lancer quoi que ce soit
     local t
     for t in "${tests[@]}"; do
         if ! declare -F "$t" >/dev/null; then

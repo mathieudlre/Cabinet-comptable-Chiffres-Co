@@ -1,6 +1,3 @@
-#!/usr/bin/env bash
-# sauvegarde.sh - sauvegarde incrémentale versionnée de /srv et /etc (B1)
-# Code de sortie : 0 succès, 1 échec, 2 erreur d'utilisation
 set -euo pipefail
 
 DESTINATION="/backup"
@@ -21,7 +18,6 @@ if ! mountpoint -q "$DESTINATION"; then
     exit 1
 fi
 
-# Empêche deux sauvegardes simultanées
 exec 9>/run/sauvegarde.lock
 if ! flock -n 9; then
     echo "Erreur : une sauvegarde est déjà en cours" >&2
@@ -31,7 +27,6 @@ fi
 NOUVELLE="$DESTINATION/$(date +%Y-%m-%d_%H%M%S)"
 PRECEDENTE="$(ls -1d "$DESTINATION"/20* 2>/dev/null | tail -n 1 || true)"
 
-# -A : ACL, -X : attributs étendus, --link-dest : fichiers inchangés partagés avec la version précédente
 OPTIONS=(-aAXH --delete --relative)
 if [[ -n "$PRECEDENTE" ]]; then
     OPTIONS+=(--link-dest="$PRECEDENTE")
@@ -46,7 +41,6 @@ else
     exit 1
 fi
 
-# Rotation : on garde les $GARDER versions les plus récentes
 mapfile -t VERSIONS < <(ls -1d "$DESTINATION"/20*)
 NB=${#VERSIONS[@]}
 if (( NB > GARDER )); then
